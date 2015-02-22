@@ -1,0 +1,12 @@
+--- cdn.module
++++ cdn.module
+@@ -242,6 +242,9 @@
+   if (!cdn_status_is_enabled()) {
+     return;
+   }
++  if (module_exists('advagg') && advagg_enabled()) {
++    return;
++  }
+ 
+   $mode = variable_get(CDN_MODE_VARIABLE, CDN_MODE_BASIC);
+   if ($mode == CDN_MODE_BASIC) {

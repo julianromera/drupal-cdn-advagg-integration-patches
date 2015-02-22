@@ -1,0 +1,86 @@
+diff --git a/cdn.advagg.inc b/cdn.advagg.inc
+new file mode 100644
+index 0000000..7c0354a
+--- /dev/null
++++ b/cdn.advagg.inc
+@@ -0,0 +1,47 @@
++<?php
++
++/**
++ * Implement hook_advagg_context_alter().
++ */
++function cdn_advagg_context_alter(&$original, $aggregate_settings, $mode) {
++  if ($mode == 0) {
++    // Save original context.
++    $original[CDN_MODE_VARIABLE] = variable_get(CDN_MODE_VARIABLE, CDN_MODE_BASIC);
++    $original[CDN_BASIC_FARFUTURE_VARIABLE] = variable_get(CDN_BASIC_FARFUTURE_VARIABLE, CDN_BASIC_FARFUTURE_DEFAULT);
++    $original[CDN_HTTPS_SUPPORT_VARIABLE] = variable_get(CDN_HTTPS_SUPPORT_VARIABLE, FALSE);
++    $original[CDN_STATUS_VARIABLE] = variable_get(CDN_STATUS_VARIABLE, CDN_DISABLED);
++
++    // Set context for file_create_url()/cdn_file_url_alter().
++    $GLOBALS['conf'][CDN_MODE_VARIABLE] = $aggregate_settings['variables'][CDN_MODE_VARIABLE];
++    $GLOBALS['conf'][CDN_BASIC_FARFUTURE_VARIABLE] = $aggregate_settings['variables'][CDN_BASIC_FARFUTURE_VARIABLE];
++    $GLOBALS['conf'][CDN_HTTPS_SUPPORT_VARIABLE] = $aggregate_settings['variables'][CDN_HTTPS_SUPPORT_VARIABLE];
++    $GLOBALS['conf'][CDN_STATUS_VARIABLE] = $aggregate_settings['variables'][CDN_STATUS_VARIABLE];
++    // Disable CDN if cdn_check_drupal_path is FALSE.
++    if (!$aggregate_settings['variables']['cdn_check_drupal_path']) {
++      $original[CDN_STATUS_VARIABLE] = CDN_DISABLED;
++    }
++
++    // Handle HTTPS.
++    if ($aggregate_settings['variables']['cdn_request_is_https'] && !cdn_request_is_https()) {
++      if (isset($_SERVER['HTTPS'])) {
++        $original['HTTPS'] = $_SERVER['HTTPS'];
++      }
++      else {
++        $original['HTTPS'] = FALSE;
++      }
++      $_SERVER['HTTPS'] = 'on';
++    }
++  }
++  elseif ($mode == 1) {
++    // Set context back.
++    $GLOBALS['conf'][CDN_MODE_VARIABLE] = $original[CDN_MODE_VARIABLE];
++    $GLOBALS['conf'][CDN_BASIC_FARFUTURE_VARIABLE] = $original[CDN_BASIC_FARFUTURE_VARIABLE];
++    $GLOBALS['conf'][CDN_HTTPS_SUPPORT_VARIABLE] = $original[CDN_HTTPS_SUPPORT_VARIABLE];
++    $GLOBALS['conf'][CDN_STATUS_VARIABLE] = $original[CDN_STATUS_VARIABLE];
++
++    // Handle HTTPS.
++    if (isset($original['HTTPS']) && !is_null($original['HTTPS'])) {
++      $_SERVER['HTTPS'] = $original['HTTPS'];
++    }
++  }
++}
+diff --git a/cdn.module b/cdn.module
+index 7e20d27..0b672cb 100644
+--- a/cdn.module
++++ b/cdn.module
+@@ -242,6 +242,9 @@ function cdn_element_info_alter(&$type) {
+   if (!cdn_status_is_enabled()) {
+     return;
+   }
++  if (module_exists('advagg') && advagg_enabled()) {
++    return;
++  }
+ 
+   $mode = variable_get(CDN_MODE_VARIABLE, CDN_MODE_BASIC);
+   if ($mode == CDN_MODE_BASIC) {
+@@ -516,6 +519,18 @@ function cdn_cdn_blacklist() {
+   return $blacklist;
+ }
+ 
++/**
++ * Implement hook_advagg_current_hooks_hash_array_alter().
++ */
++function cdn_advagg_current_hooks_hash_array_alter(&$advagg_hash) {
++  // Used in cdn_advagg_context_alter.
++  $advagg_hash['variables'][CDN_MODE_VARIABLE] = variable_get(CDN_MODE_VARIABLE, CDN_MODE_BASIC);
++  $advagg_hash['variables'][CDN_BASIC_FARFUTURE_VARIABLE] = variable_get(CDN_BASIC_FARFUTURE_VARIABLE, CDN_BASIC_FARFUTURE_DEFAULT);
++  $advagg_hash['variables'][CDN_HTTPS_SUPPORT_VARIABLE] = variable_get(CDN_HTTPS_SUPPORT_VARIABLE, FALSE);
++  $advagg_hash['variables'][CDN_STATUS_VARIABLE] = variable_get(CDN_STATUS_VARIABLE, CDN_DISABLED);
++  $advagg_hash['variables']['cdn_request_is_https'] = cdn_request_is_https();
++  $advagg_hash['variables']['cdn_check_drupal_path'] = cdn_check_drupal_path($_GET['q']);
++}
+ 
+ //----------------------------------------------------------------------------
+ // Drush.
